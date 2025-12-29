@@ -1,72 +1,56 @@
 import psutil
+import csv
 import time
-from collections import deque
+import os
 
-MAX_CONNECTIONS = 3
-WINDOW_SECONDS = 60
-REPEATED_THRESHOLD = 3
+CSV_NAME = "network_activity.csv"
+SCAN_INTERVAL = 10  # seconds
 
-connection_history = {}
+def scan_network_connections():
+    rows = []
+    timestamp = int(time.time())
+    for conn in psutil.net_connections(kind='tcp'):
+        # We care about connections that have remote endpoints and associated PIDs
+        if conn.raddr and conn.pid:
+            local_addr = f"{conn.laddr.ip}:{conn.laddr.port}" if conn.laddr else ""
+            remote_addr = conn.raddr.ip
+            remote_port = conn.raddr.port
+            pid = conn.pid
+            status = conn.status
 
-def get_network_connections():
-    print("Getting network connections...")   # DEBUG
-    conns = psutil.net_connections(kind='tcp')
-    proc_conn_count = {}
+            rows.append([
+                pid,
+                local_addr,
+                remote_addr,
+                remote_port,
+                status,
+                timestamp
+            ])
+    return rows
 
-    for conn in conns:
-        pid = conn.pid
-        if pid is None:
-            continue
-        proc_conn_count[pid] = proc_conn_count.get(pid, 0) + 1
-    print(f"Found {len(proc_conn_count)} processes with TCP connections")  # DEBUG
-    return proc_conn_count
-
-def update_history_and_check(proc_conn_count):
-    print("Updating history and checking flags...")  # DEBUG
-    current_time = time.time()
-    flagged_procs = []
-
-    for pid, conn_count in proc_conn_count.items():
-        if pid not in connection_history:
-            connection_history[pid] = deque()
-
-        connection_history[pid].append((current_time, conn_count))
-
-        while connection_history[pid] and current_time - connection_history[pid][0][0] > WINDOW_SECONDS:
-            connection_history[pid].popleft()
-
-        times_exceeded = sum(1 for t, c in connection_history[pid] if c > MAX_CONNECTIONS)
-
-        if times_exceeded >= REPEATED_THRESHOLD:
-            flagged_procs.append((pid, times_exceeded, conn_count))
-
-    print(f"Flagged processes: {flagged_procs}")  # DEBUG
-    return flagged_procs
+def save_csv(rows):
+    # Append mode, so we accumulate data over time
+    file_exists = os.path.isfile(CSV_NAME)
+    with open(CSV_NAME, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            # Write header only once
+            writer.writerow(['pid', 'local_address', 'remote_address', 'remote_port', 'status', 'timestamp'])
+        writer.writerows(rows)
 
 def main():
-    print(f"Monitoring network connections... Threshold: >{MAX_CONNECTIONS} connections")
-    print(f"Flag if repeated {REPEATED_THRESHOLD} times in last {WINDOW_SECONDS} seconds.\n")
-
+    print(f"Starting network monitor. Appending data to {CSV_NAME} every {SCAN_INTERVAL}s")
     try:
         while True:
-            proc_conn_count = get_network_connections()
-            flagged = update_history_and_check(proc_conn_count)
-
-            if flagged:
-                print("Suspicious network activity detected:")
-                for pid, count_exceeded, current_conn in flagged:
-                    try:
-                        proc_name = psutil.Process(pid).name()
-                    except psutil.NoSuchProcess:
-                        proc_name = "Unknown"
-                    print(f"PID: {pid}, Process: {proc_name}, Times Exceeded: {count_exceeded}, Current Connections: {current_conn}")
+            rows = scan_network_connections()
+            if rows:
+                save_csv(rows)
+                print(f"[{time.ctime()}] Logged {len(rows)} active connections")
             else:
-                print("No suspicious activity detected.")
-
-            time.sleep(10)
-
+                print(f"[{time.ctime()}] No active remote TCP connections found")
+            time.sleep(SCAN_INTERVAL)
     except KeyboardInterrupt:
-        print("\nMonitoring stopped.")
+        print("\nNetwork monitoring stopped.")
 
 if __name__ == "__main__":
     main()

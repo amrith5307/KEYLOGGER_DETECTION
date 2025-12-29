@@ -1,0 +1,10 @@
+pid,process_name,score,cmdline,runtime_seconds,has_ui,reasons
+1428,WUDFHost.exe,4,,840421,NO,Long runtime (>12h); No UI - suspicious background process; High network activity (10 connections in recent interval)
+1948,WUDFHost.exe,4,,840422,NO,Long runtime (>12h); No UI - suspicious background process; High network activity (10 connections in recent interval)
+3296,NVDisplay.Container.exe,4,,840421,NO,Long runtime (>12h); No UI - suspicious background process; High network activity (10 connections in recent interval)
+5508,ipfsvc.exe,4,,840420,NO,Long runtime (>12h); No UI - suspicious background process; High network activity (10 connections in recent interval)
+7532,mysqld.exe,4,,840420,NO,Long runtime (>12h); No UI - suspicious background process; High network activity (20 connections in recent interval)
+9740,python.exe,5,D:\KEYLOGGER DETECTION\venv\Scripts\python.exe .\PROCESS_MONITOR.py,0,NO,Generic executable name; Suspicious keyword in command line; Short runtime (<30s); No UI - suspicious background process
+16040,python.exe,5,D:\KEYLOGGER DETECTION\venv\Scripts\python.exe .\NETWORK_MONITOR.py,3,NO,Generic executable name; Suspicious keyword in command line; Short runtime (<30s); No UI - suspicious background process
+20928,python3.11.exe,5,C:\Users\amrit\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe .\fake_logger.py,118,NO,Suspicious keyword in command line; No UI - suspicious background process; High network activity (150 connections in recent interval)
+27984,python.exe,4,D:\KEYLOGGER DETECTION\venv\Scripts\python.exe .\fake_logger.py,118,NO,Generic executable name; Suspicious keyword in command line; No UI - suspicious background process

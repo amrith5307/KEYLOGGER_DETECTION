@@ -3,6 +3,7 @@ import time
 import csv
 import signal
 import sys
+import psutil
 
 # ----------------------------------
 # CONFIGURATION
@@ -23,6 +24,25 @@ file_info = {}
 all_flagged = []
 
 # ----------------------------------
+# HELPER: Find PIDs that currently have a file open
+# ----------------------------------
+def find_pids_for_file(filepath):
+    pids = set()
+    for proc in psutil.process_iter(['pid']):
+        try:
+            # open_files() can fail or hang, so wrap in try-except
+            open_files = proc.open_files()
+            for f in open_files:
+                if os.path.abspath(f.path) == os.path.abspath(filepath):
+                    pids.add(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+        except Exception as e:
+            print(f"[WARN] Error checking open files for PID {proc.pid}: {e}")
+            continue
+    return list(pids)
+
+# ----------------------------------
 # CSV SAVE FUNCTION
 # ----------------------------------
 def save_csv(rows):
@@ -36,20 +56,21 @@ def save_csv(rows):
     print(f"\n[INFO] Saving CSV to: {csv_path}")
 
     try:
-        with open(csv_path, "w", newline="") as f:
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
                 "filename",
                 "current_size_bytes",
                 "write_count",
-                "reason"
+                "reason",
+                "pid_list"
             ])
 
             if rows:
                 for row in rows:
                     writer.writerow(row)
             else:
-                writer.writerow(["-", "-", "-", "No suspicious file activity detected"])
+                writer.writerow(["-", "-", "-", "No suspicious file activity detected", "-"])
 
         print("[INFO] file_flags.csv generated successfully")
     except Exception as e:
@@ -63,6 +84,7 @@ def check_files():
     suspicious_now = []
 
     current_time = time.time()
+    print("[DEBUG] Checking files...")
 
     for filename in os.listdir(FOLDER_TO_MONITOR):
         filepath = os.path.join(FOLDER_TO_MONITOR, filename)
@@ -98,19 +120,23 @@ def check_files():
 
         # Suspicion logic
         if len(info["write_times"]) > MAX_WRITES_IN_WINDOW:
+            pids = find_pids_for_file(filepath)
             suspicious_now.append((
                 filename,
                 size,
                 len(info["write_times"]),
-                f"Frequent file writes ({len(info['write_times'])} times in {WINDOW_SECONDS}s)"
+                f"Frequent file writes ({len(info['write_times'])} times in {WINDOW_SECONDS}s)",
+                ",".join(map(str, pids)) if pids else "-"
             ))
 
         elif size_growth > MAX_SIZE_GROWTH:
+            pids = find_pids_for_file(filepath)
             suspicious_now.append((
                 filename,
                 size,
                 len(info["write_times"]),
-                f"Large file size growth ({size_growth} bytes)"
+                f"Large file size growth ({size_growth} bytes)",
+                ",".join(map(str, pids)) if pids else "-"
             ))
 
     # Store unique flagged entries
@@ -143,13 +169,14 @@ def main():
         if flagged:
             print("\n[ALERT] Suspicious file activity detected:")
             for f in flagged:
-                print(f" - {f[0]} | Size={f[1]} bytes | Writes={f[2]} | Reason: {f[3]}")
+                print(f" - {f[0]} | Size={f[1]} bytes | Writes={f[2]} | Reason: {f[3]} | PIDs: {f[4]}")
 
             # Save CSV every time suspicious files are found
             save_csv(all_flagged)
         else:
             print("[INFO] No suspicious activity detected.")
 
+        print("[DEBUG] Sleeping before next check...")
         time.sleep(CHECK_INTERVAL)
 
 # ----------------------------------
